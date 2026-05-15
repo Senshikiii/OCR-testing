@@ -1,30 +1,26 @@
-# running easyocr
-
-import os
 from PIL import Image
-import easyocr
+import torch
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
-plate_dir = "../archive/cropped_plates/"
+model_name = "microsoft/trocr-large-printed"
 
-reader = easyocr.Reader(["en"])
+processor = TrOCRProcessor.from_pretrained(model_name)
 
-plate_files = [
-    filename
-    for filename in os.listdir(plate_dir)
-    if filename.lower().endswith("jpg")
+model = VisionEncoderDecoderModel.from_pretrained(model_name)
 
-]
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
 
-print("Total plate images:", len(plate_files))
 
-for plate_name in sorted(plate_files):
-    plate_path = os.path.join(plate_dir, plate_name)
-    result = reader.readtext(plate_path)
 
-    print("=======", plate_name, "=======")
-    if not result:
-        print("[no text detected]")
-        continue
+def read_text(image_path):
+    image = Image.open(image_path).convert("RGB")
+    pixel_values = processor(images=image,return_tensors="pt").pixel_values.to(device)
 
-    for _, text, _ in result:
-        print(text)
+    generated_ids = model.generate(pixel_values)
+    text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return text
+
+print(read_text("../archive/cropped_plates/Datacluster_number_plates (101)_plate0.jpg"))
+
+
